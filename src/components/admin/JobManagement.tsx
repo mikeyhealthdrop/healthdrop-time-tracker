@@ -12,7 +12,7 @@ import {
 interface Job {
   id: string;
   job_number: string;
-  status: 'active' | 'archived';
+  is_active: boolean;
   created_at: string;
   org_id: string;
 }
@@ -38,22 +38,24 @@ export default function JobManagement({ orgId, userId }: JobManagementProps) {
   const [reactivatingJobId, setReactivatingJobId] = useState<string | null>(null);
   const [confirmArchiveId, setConfirmArchiveId] = useState<string | null>(null);
 
-  useEffect(() => {
-    const fetchJobs = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        const data = await getAllJobsForAdmin(orgId);
-        setJobs(data || []);
-      } catch (err) {
-        setError(
-          err instanceof Error ? err.message : 'Failed to load jobs'
-        );
-      } finally {
-        setLoading(false);
+  const fetchJobs = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const result = await getAllJobsForAdmin(orgId);
+      if (result.error) {
+        setError(result.error);
+      } else {
+        setJobs(result.data || []);
       }
-    };
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load jobs');
+    } finally {
+      setLoading(false);
+    }
+  };
 
+  useEffect(() => {
     fetchJobs();
   }, [orgId]);
 
@@ -62,22 +64,19 @@ export default function JobManagement({ orgId, userId }: JobManagementProps) {
       setError('Job number cannot be empty');
       return;
     }
-
     try {
       setAddingJob(true);
       setError(null);
-      const result = await createJob(orgId, newJobNumber.trim());
+      const result = await createJob(orgId, newJobNumber.trim(), userId);
       if (result.error) {
         setError(result.error);
         return;
       }
-      setJobs([...jobs, result.data as Job]);
+      await fetchJobs();
       setNewJobNumber('');
       setShowAddForm(false);
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : 'Failed to create job'
-      );
+      setError(err instanceof Error ? err.message : 'Failed to create job');
     } finally {
       setAddingJob(false);
     }
@@ -94,28 +93,19 @@ export default function JobManagement({ orgId, userId }: JobManagementProps) {
       setEditingJobError('Job number cannot be empty');
       return;
     }
-
     try {
       setSavingJobId(jobId);
       setEditingJobError(null);
-      const result = await updateJob(jobId, editJobNumber.trim());
+      const result = await updateJob(jobId, orgId, editJobNumber.trim());
       if (result.error) {
         setEditingJobError(result.error);
         return;
       }
-      setJobs(
-        jobs.map((job) =>
-          job.id === jobId
-            ? { ...job, job_number: editJobNumber.trim() }
-            : job
-        )
-      );
+      setJobs(jobs.map((job) => job.id === jobId ? { ...job, job_number: editJobNumber.trim() } : job));
       setEditingJobId(null);
       setEditJobNumber('');
     } catch (err) {
-      setEditingJobError(
-        err instanceof Error ? err.message : 'Failed to update job'
-      );
+      setEditingJobError(err instanceof Error ? err.message : 'Failed to update job');
     } finally {
       setSavingJobId(null);
     }
@@ -125,21 +115,15 @@ export default function JobManagement({ orgId, userId }: JobManagementProps) {
     try {
       setArchivingJobId(jobId);
       setError(null);
-      const result = await archiveJob(jobId);
+      const result = await archiveJob(jobId, orgId);
       if (result.error) {
         setError(result.error);
         return;
       }
-      setJobs(
-        jobs.map((job) =>
-          job.id === jobId ? { ...job, status: 'archived' } : job
-        )
-      );
+      setJobs(jobs.map((job) => job.id === jobId ? { ...job, is_active: false } : job));
       setConfirmArchiveId(null);
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : 'Failed to archive job'
-      );
+      setError(err instanceof Error ? err.message : 'Failed to archive job');
     } finally {
       setArchivingJobId(null);
     }
@@ -149,34 +133,24 @@ export default function JobManagement({ orgId, userId }: JobManagementProps) {
     try {
       setReactivatingJobId(jobId);
       setError(null);
-      const result = await reactivateJob(jobId);
+      const result = await reactivateJob(jobId, orgId);
       if (result.error) {
         setError(result.error);
         return;
       }
-      setJobs(
-        jobs.map((job) =>
-          job.id === jobId ? { ...job, status: 'active' } : job
-        )
-      );
+      setJobs(jobs.map((job) => job.id === jobId ? { ...job, is_active: true } : job));
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : 'Failed to reactivate job'
-      );
+      setError(err instanceof Error ? err.message : 'Failed to reactivate job');
     } finally {
       setReactivatingJobId(null);
     }
   };
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-    });
+    return new Date(dateString).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
   };
 
-  const displayJobs = showArchived ? jobs : jobs.filter((job) => job.status === 'active');
+  const displayJobs = showArchived ? jobs : jobs.filter((job) => job.is_active);
 
   if (loading) {
     return (
@@ -189,7 +163,7 @@ export default function JobManagement({ orgId, userId }: JobManagementProps) {
   return (
     <div className="space-y-4">
       {error && (
-        <div className="bg-surface border border-border rounded-[10px] shadow-sm p-4">
+        <div className="bg-surface border border-red-200 rounded-[10px] shadow-sm p-4">
           <div className="text-red-600 text-[14px]">{error}</div>
         </div>
       )}
@@ -197,60 +171,25 @@ export default function JobManagement({ orgId, userId }: JobManagementProps) {
       <div className="bg-surface border border-border rounded-[10px] shadow-sm p-6">
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-[16px] font-semibold text-text-primary">Jobs</h2>
-          <button
-            onClick={() => setShowAddForm(!showAddForm)}
-            className="px-3.5 py-2.5 bg-accent hover:bg-accent-hover text-white text-[14px] font-medium rounded-sm transition-colors"
-          >
+          <button onClick={() => setShowAddForm(!showAddForm)} className="px-3.5 py-2.5 bg-accent hover:bg-accent-hover text-white text-[14px] font-medium rounded-sm transition-colors">
             Add Job
           </button>
         </div>
 
         {showAddForm && (
-          <div className="mb-6 p-4 bg-surface border border-border rounded-sm space-y-3">
-            <label className="text-[11px] font-semibold text-text-secondary uppercase tracking-wide block">
-              Job Number
-            </label>
-            <input
-              type="text"
-              value={newJobNumber}
-              onChange={(e) => setNewJobNumber(e.target.value)}
-              placeholder="Enter job number"
-              className="w-full px-3.5 py-2.5 border border-border rounded-sm text-[14px] bg-surface text-text-primary placeholder-text-secondary"
-              onKeyPress={(e) => {
-                if (e.key === 'Enter') {
-                  handleAddJob();
-                }
-              }}
-            />
+          <div className="mb-6 p-4 bg-gray-50 border border-border rounded-sm space-y-3">
+            <label className="text-[11px] font-semibold text-text-secondary uppercase tracking-wide block">Job Number</label>
+            <input type="text" value={newJobNumber} onChange={(e) => setNewJobNumber(e.target.value)} placeholder="Enter job number" className="w-full px-3.5 py-2.5 border border-border rounded-sm text-[14px]" onKeyDown={(e) => { if (e.key === 'Enter') handleAddJob(); }} />
             <div className="flex gap-2">
-              <button
-                onClick={handleAddJob}
-                disabled={addingJob}
-                className="px-3.5 py-2.5 bg-green hover:bg-[#15803d] text-white text-[14px] font-medium rounded-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {addingJob ? 'Creating...' : 'Create'}
-              </button>
-              <button
-                onClick={() => {
-                  setShowAddForm(false);
-                  setNewJobNumber('');
-                }}
-                className="px-3.5 py-2.5 bg-surface border border-border text-text-primary text-[14px] font-medium rounded-sm hover:bg-[rgba(255,255,255,0.05)] transition-colors"
-              >
-                Cancel
-              </button>
+              <button onClick={handleAddJob} disabled={addingJob} className="px-3.5 py-2.5 bg-green-600 hover:bg-green-700 text-white text-[14px] font-medium rounded-sm transition-colors disabled:opacity-50">{addingJob ? 'Creating...' : 'Create'}</button>
+              <button onClick={() => { setShowAddForm(false); setNewJobNumber(''); }} className="px-3.5 py-2.5 border border-border text-text-primary text-[14px] font-medium rounded-sm hover:bg-gray-100 transition-colors">Cancel</button>
             </div>
           </div>
         )}
 
         <div className="space-y-2 mb-4">
           <label className="flex items-center gap-2 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={showArchived}
-              onChange={(e) => setShowArchived(e.target.checked)}
-              className="w-4 h-4 rounded border-border cursor-pointer"
-            />
+            <input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} className="w-4 h-4 rounded border-border cursor-pointer" />
             <span className="text-[13px] text-text-secondary">Show archived jobs</span>
           </label>
         </div>
@@ -259,122 +198,56 @@ export default function JobManagement({ orgId, userId }: JobManagementProps) {
           <table className="w-full text-[13px]">
             <thead>
               <tr className="border-b border-border">
-                <th className="text-left py-3 px-4 text-[11px] font-semibold text-text-secondary uppercase tracking-wide">
-                  Job Number
-                </th>
-                <th className="text-left py-3 px-4 text-[11px] font-semibold text-text-secondary uppercase tracking-wide">
-                  Status
-                </th>
-                <th className="text-left py-3 px-4 text-[11px] font-semibold text-text-secondary uppercase tracking-wide">
-                  Created
-                </th>
-                <th className="text-left py-3 px-4 text-[11px] font-semibold text-text-secondary uppercase tracking-wide">
-                  Actions
-                </th>
+                <th className="text-left py-3 px-4 text-[11px] font-semibold text-text-secondary uppercase tracking-wide">Job Number</th>
+                <th className="text-left py-3 px-4 text-[11px] font-semibold text-text-secondary uppercase tracking-wide">Status</th>
+                <th className="text-left py-3 px-4 text-[11px] font-semibold text-text-secondary uppercase tracking-wide">Created</th>
+                <th className="text-left py-3 px-4 text-[11px] font-semibold text-text-secondary uppercase tracking-wide">Actions</th>
               </tr>
             </thead>
             <tbody>
               {displayJobs.length === 0 ? (
-                <tr>
-                  <td colSpan={4} className="py-8 px-4 text-center text-text-secondary">
-                    {showArchived ? 'No archived jobs' : 'No active jobs'}
-                  </td>
-                </tr>
+                <tr><td colSpan={4} className="py-8 px-4 text-center text-text-secondary">{showArchived ? 'No jobs found' : 'No active jobs'}</td></tr>
               ) : (
                 displayJobs.map((job) => (
-                  <tr key={job.id} className="border-b border-border hover:bg-[rgba(255,255,255,0.02)] transition-colors">
+                  <tr key={job.id} className="border-b border-border hover:bg-gray-50 transition-colors">
                     <td className="py-3 px-4">
                       {editingJobId === job.id ? (
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="text"
-                            value={editJobNumber}
-                            onChange={(e) => setEditJobNumber(e.target.value)}
-                            className="px-3.5 py-2.5 border border-border rounded-sm text-[14px] bg-surface text-text-primary w-full"
-                            autoFocus
-                          />
-                          {editingJobError && (
-                            <div className="text-red-600 text-[12px] absolute -bottom-5">{editingJobError}</div>
-                          )}
+                        <div>
+                          <input type="text" value={editJobNumber} onChange={(e) => setEditJobNumber(e.target.value)} className="px-3.5 py-2.5 border border-border rounded-sm text-[14px] w-full" autoFocus />
+                          {editingJobError && <div className="text-red-600 text-[12px] mt-1">{editingJobError}</div>}
                         </div>
                       ) : (
                         <span className="text-text-primary font-medium">{job.job_number}</span>
                       )}
                     </td>
                     <td className="py-3 px-4">
-                      {job.status === 'active' ? (
-                        <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-semibold bg-green/10 text-green">
-                          Active
-                        </span>
+                      {job.is_active ? (
+                        <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-semibold bg-green-100 text-green-700">Active</span>
                       ) : (
-                        <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-semibold bg-text-secondary/10 text-text-secondary">
-                          Archived
-                        </span>
+                        <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-semibold bg-gray-100 text-gray-600">Archived</span>
                       )}
                     </td>
                     <td className="py-3 px-4 text-text-secondary">{formatDate(job.created_at)}</td>
                     <td className="py-3 px-4">
                       {editingJobId === job.id ? (
                         <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => handleSaveJob(job.id)}
-                            disabled={savingJobId === job.id}
-                            className="px-3.5 py-2.5 bg-green hover:bg-[#15803d] text-white text-[12px] font-medium rounded-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                          >
-                            {savingJobId === job.id ? 'Saving...' : 'Save'}
-                          </button>
-                          <button
-                            onClick={() => {
-                              setEditingJobId(null);
-                              setEditJobNumber('');
-                              setEditingJobError(null);
-                            }}
-                            className="px-3.5 py-2.5 bg-surface border border-border text-text-primary text-[12px] font-medium rounded-sm hover:bg-[rgba(255,255,255,0.05)] transition-colors"
-                          >
-                            Cancel
-                          </button>
+                          <button onClick={() => handleSaveJob(job.id)} disabled={savingJobId === job.id} className="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-[12px] font-medium rounded-sm disabled:opacity-50">{savingJobId === job.id ? 'Saving...' : 'Save'}</button>
+                          <button onClick={() => { setEditingJobId(null); setEditJobNumber(''); setEditingJobError(null); }} className="px-3 py-1.5 border border-border text-text-primary text-[12px] font-medium rounded-sm hover:bg-gray-100">Cancel</button>
                         </div>
-                      ) : job.status === 'active' ? (
+                      ) : job.is_active ? (
                         <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => handleEditJob(job)}
-                            className="px-3.5 py-2.5 bg-surface border border-border text-text-primary text-[12px] font-medium rounded-sm hover:bg-[rgba(255,255,255,0.05)] transition-colors"
-                          >
-                            Edit
-                          </button>
+                          <button onClick={() => handleEditJob(job)} className="text-[12px] font-medium text-accent hover:text-accent-hover transition-colors">Edit</button>
                           {confirmArchiveId === job.id ? (
                             <div className="flex items-center gap-2">
-                              <button
-                                onClick={() => handleArchiveJob(job.id)}
-                                disabled={archivingJobId === job.id}
-                                className="px-3.5 py-2.5 bg-red-600 hover:bg-red-700 text-white text-[12px] font-medium rounded-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                              >
-                                {archivingJobId === job.id ? 'Archiving...' : 'Confirm'}
-                              </button>
-                              <button
-                                onClick={() => setConfirmArchiveId(null)}
-                                className="px-3.5 py-2.5 bg-surface border border-border text-text-primary text-[12px] font-medium rounded-sm hover:bg-[rgba(255,255,255,0.05)] transition-colors"
-                              >
-                                Cancel
-                              </button>
+                              <button onClick={() => handleArchiveJob(job.id)} disabled={archivingJobId === job.id} className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white text-[12px] font-medium rounded-sm disabled:opacity-50">{archivingJobId === job.id ? 'Archiving...' : 'Confirm'}</button>
+                              <button onClick={() => setConfirmArchiveId(null)} className="text-[12px] font-medium text-text-secondary hover:text-text-primary">Cancel</button>
                             </div>
                           ) : (
-                            <button
-                              onClick={() => setConfirmArchiveId(job.id)}
-                              className="px-3.5 py-2.5 bg-surface border border-border text-text-primary text-[12px] font-medium rounded-sm hover:bg-[rgba(255,255,255,0.05)] transition-colors"
-                            >
-                              Archive
-                            </button>
+                            <button onClick={() => setConfirmArchiveId(job.id)} className="text-[12px] font-medium text-red-600 hover:text-red-800 transition-colors">Archive</button>
                           )}
                         </div>
                       ) : (
-                        <button
-                          onClick={() => handleReactivateJob(job.id)}
-                          disabled={reactivatingJobId === job.id}
-                          className="px-3.5 py-2.5 bg-accent hover:bg-accent-hover text-white text-[12px] font-medium rounded-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          {reactivatingJobId === job.id ? 'Reactivating...' : 'Reactivate'}
-                        </button>
+                        <button onClick={() => handleReactivateJob(job.id)} disabled={reactivatingJobId === job.id} className="text-[12px] font-medium text-accent hover:text-accent-hover transition-colors disabled:opacity-50">{reactivatingJobId === job.id ? 'Reactivating...' : 'Reactivate'}</button>
                       )}
                     </td>
                   </tr>

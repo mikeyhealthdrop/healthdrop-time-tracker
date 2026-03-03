@@ -4,20 +4,15 @@ import { useEffect, useRef, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { formatTimer } from '@/lib/utils';
 
-interface TimeEntry {
+interface ActiveEntry {
   id: string;
   clock_in: string;
   clock_out: string | null;
-  on_lunch: boolean;
+  entry_type: 'work' | 'lunch';
   job_id: string | null;
   user_id: string;
-  job?: {
-    number: string;
-  };
-  user?: {
-    first_name: string;
-    last_name: string;
-  };
+  job?: { job_number: string } | null;
+  user?: { first_name: string; last_name: string } | null;
 }
 
 interface LiveDashboardProps {
@@ -28,7 +23,7 @@ export default function LiveDashboard({ orgId }: LiveDashboardProps) {
   const supabaseRef = useRef(createClient());
   const supabase = supabaseRef.current;
 
-  const [timeEntries, setTimeEntries] = useState<TimeEntry[]>([]);
+  const [entries, setEntries] = useState<ActiveEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [elapsedSeconds, setElapsedSeconds] = useState<Record<string, number>>({});
   const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -39,24 +34,12 @@ export default function LiveDashboard({ orgId }: LiveDashboardProps) {
     try {
       const { data, error } = await supabase
         .from('time_entries')
-        .select(
-          `
-          id,
-          clock_in,
-          clock_out,
-          on_lunch,
-          job_id,
-          user_id,
-          job:jobs(number),
-          user:users(first_name, last_name)
-        `
-        )
-        .eq('organization_id', orgId)
+        .select('id, clock_in, clock_out, entry_type, job_id, user_id, job:jobs(job_number), user:users(first_name, last_name)')
+        .eq('org_id', orgId)
         .is('clock_out', null);
 
       if (error) throw error;
-
-      setTimeEntries(data || []);
+      setEntries(data || []);
       initializeElapsedSeconds(data || []);
     } catch (error) {
       console.error('Error fetching active time entries:', error);
@@ -65,16 +48,12 @@ export default function LiveDashboard({ orgId }: LiveDashboardProps) {
     }
   };
 
-  const initializeElapsedSeconds = (entries: TimeEntry[]) => {
+  const initializeElapsedSeconds = (entries: ActiveEntry[]) => {
     const now = Date.now();
     const newElapsed: Record<string, number> = {};
-
     entries.forEach((entry) => {
-      const clockInTime = new Date(entry.clock_in).getTime();
-      const elapsedMs = now - clockInTime;
-      newElapsed[entry.id] = Math.floor(elapsedMs / 1000);
+      newElapsed[entry.id] = Math.floor((now - new Date(entry.clock_in).getTime()) / 1000);
     });
-
     setElapsedSeconds(newElapsed);
   };
 
@@ -83,63 +62,36 @@ export default function LiveDashboard({ orgId }: LiveDashboardProps) {
 
     subscriptionRef.current = supabase
       .channel(`time_entries:${orgId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'time_entries',
-          filter: `organization_id=eq.${orgId}`,
-        },
-        () => {
-          fetchActiveEntries();
-        }
-      )
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'time_entries', filter: `org_id=eq.${orgId}` }, () => {
+        fetchActiveEntries();
+      })
       .subscribe();
 
-    refreshIntervalRef.current = setInterval(() => {
-      fetchActiveEntries();
-    }, 30000);
+    refreshIntervalRef.current = setInterval(() => { fetchActiveEntries(); }, 30000);
 
     return () => {
-      if (subscriptionRef.current) {
-        subscriptionRef.current.unsubscribe();
-      }
-      if (refreshIntervalRef.current) {
-        clearInterval(refreshIntervalRef.current);
-      }
+      if (subscriptionRef.current) subscriptionRef.current.unsubscribe();
+      if (refreshIntervalRef.current) clearInterval(refreshIntervalRef.current);
     };
-  }, [orgId, supabase]);
+  }, [orgId]);
 
   useEffect(() => {
     timerIntervalRef.current = setInterval(() => {
       setElapsedSeconds((prev) => {
         const updated = { ...prev };
-        Object.keys(updated).forEach((key) => {
-          updated[key] += 1;
-        });
+        Object.keys(updated).forEach((key) => { updated[key] += 1; });
         return updated;
       });
     }, 1000);
-
-    return () => {
-      if (timerIntervalRef.current) {
-        clearInterval(timerIntervalRef.current);
-      }
-    };
+    return () => { if (timerIntervalRef.current) clearInterval(timerIntervalRef.current); };
   }, []);
 
-  const totalClockedIn = timeEntries.length;
-  const onLunch = timeEntries.filter((entry) => entry.on_lunch).length;
+  const totalClockedIn = entries.length;
+  const onLunch = entries.filter((e) => e.entry_type === 'lunch').length;
   const working = totalClockedIn - onLunch;
 
   const formatClockInTime = (clockInTime: string) => {
-    const date = new Date(clockInTime);
-    return date.toLocaleString('en-US', {
-      hour: 'numeric',
-      minute: '2-digit',
-      hour12: true,
-    });
+    return new Date(clockInTime).toLocaleString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
   };
 
   if (loading) {
@@ -155,23 +107,15 @@ export default function LiveDashboard({ orgId }: LiveDashboardProps) {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="bg-surface border border-border rounded-[10px] p-5 shadow-sm">
           <div className="text-text-secondary text-sm mb-2">Total Clocked In</div>
-          <div className="text-4xl font-bold text-green bg-green-light rounded-lg p-4 text-center">
-            {totalClockedIn}
-          </div>
+          <div className="text-4xl font-bold text-green-600 bg-green-50 rounded-lg p-4 text-center">{totalClockedIn}</div>
         </div>
-
         <div className="bg-surface border border-border rounded-[10px] p-5 shadow-sm">
           <div className="text-text-secondary text-sm mb-2">On Lunch</div>
-          <div className="text-4xl font-bold text-orange bg-orange-light rounded-lg p-4 text-center">
-            {onLunch}
-          </div>
+          <div className="text-4xl font-bold text-orange-600 bg-orange-50 rounded-lg p-4 text-center">{onLunch}</div>
         </div>
-
         <div className="bg-surface border border-border rounded-[10px] p-5 shadow-sm">
           <div className="text-text-secondary text-sm mb-2">Working</div>
-          <div className="text-4xl font-bold text-green bg-green-light rounded-lg p-4 text-center">
-            {working}
-          </div>
+          <div className="text-4xl font-bold text-green-600 bg-green-50 rounded-lg p-4 text-center">{working}</div>
         </div>
       </div>
 
@@ -179,53 +123,37 @@ export default function LiveDashboard({ orgId }: LiveDashboardProps) {
         <div className="bg-surface border border-border rounded-[10px] p-12 shadow-sm flex items-center justify-center">
           <div className="text-center">
             <div className="text-text-secondary mb-2">No one is currently clocked in</div>
-            <div className="text-text-muted text-sm">Check back when employees start their shifts</div>
+            <div className="text-gray-400 text-sm">Check back when employees start their shifts</div>
           </div>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {timeEntries.map((entry) => {
+          {entries.map((entry) => {
             const firstName = entry.user?.first_name || '';
             const lastName = entry.user?.last_name || '';
-            const fullName = `${firstName} ${lastName}`.trim();
-            const jobNumber = entry.on_lunch ? 'Lunch Break' : entry.job?.number || 'No Job';
+            const fullName = `${firstName} ${lastName}`.trim() || 'Unknown';
+            const isLunch = entry.entry_type === 'lunch';
+            const jobLabel = isLunch ? 'Lunch Break' : (entry.job?.job_number || 'No Job');
             const elapsed = elapsedSeconds[entry.id] || 0;
 
             return (
-              <div
-                key={entry.id}
-                className="bg-surface border border-border rounded-[10px] p-5 shadow-sm"
-              >
+              <div key={entry.id} className="bg-surface border border-border rounded-[10px] p-5 shadow-sm">
                 <div className="flex items-start justify-between mb-4">
                   <div>
                     <h3 className="font-bold text-text-primary">{fullName}</h3>
-                    <div className="text-text-secondary text-xs mt-1">
-                      {formatClockInTime(entry.clock_in)}
-                    </div>
+                    <div className="text-text-secondary text-xs mt-1">{formatClockInTime(entry.clock_in)}</div>
                   </div>
-                  <div
-                    className={`px-3 py-1 rounded-full text-xs font-medium ${
-                      entry.on_lunch
-                        ? 'bg-orange-light text-orange'
-                        : 'bg-green-light text-green'
-                    }`}
-                  >
-                    {entry.on_lunch ? 'On Lunch' : 'Working'}
+                  <div className={`px-3 py-1 rounded-full text-xs font-medium ${isLunch ? 'bg-orange-50 text-orange-600' : 'bg-green-50 text-green-600'}`}>
+                    {isLunch ? 'On Lunch' : 'Working'}
                   </div>
                 </div>
-
                 <div className="mb-4">
-                  <div className="text-text-secondary text-xs mb-1">
-                    {entry.on_lunch ? 'Lunch Break' : 'Job'}
-                  </div>
-                  <div className="text-text-primary font-medium">{jobNumber}</div>
+                  <div className="text-text-secondary text-xs mb-1">{isLunch ? 'Lunch Break' : 'Job'}</div>
+                  <div className="text-text-primary font-medium">{jobLabel}</div>
                 </div>
-
-                <div className="bg-surface border border-border rounded-lg p-3">
+                <div className="bg-gray-50 border border-border rounded-lg p-3">
                   <div className="text-text-secondary text-xs mb-1">Elapsed Time</div>
-                  <div className="text-2xl font-bold text-text-primary">
-                    {formatTimer(elapsed)}
-                  </div>
+                  <div className="text-2xl font-bold text-text-primary">{formatTimer(elapsed)}</div>
                 </div>
               </div>
             );
