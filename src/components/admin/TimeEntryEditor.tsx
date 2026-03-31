@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { getTimeEntriesForAdmin, editTimeEntry, deleteTimeEntry } from '@/app/actions/time-entry-edits';
 
 interface TimeEntryRow {
@@ -33,6 +33,19 @@ interface TimeEntryEditorProps {
   jobs: Job[];
 }
 
+type SortColumn = 'date' | 'employee' | 'job' | 'type' | 'clockin' | 'clockout' | 'duration';
+
+const COLUMN_CONFIG: { label: string; key: SortColumn | null }[] = [
+  { label: 'Date', key: 'date' },
+  { label: 'Employee', key: 'employee' },
+  { label: 'Job', key: 'job' },
+  { label: 'Type', key: 'type' },
+  { label: 'Clock In', key: 'clockin' },
+  { label: 'Clock Out', key: 'clockout' },
+  { label: 'Duration', key: 'duration' },
+  { label: 'Actions', key: null },
+];
+
 export default function TimeEntryEditor({ orgId, userId, employees, jobs }: TimeEntryEditorProps) {
   const today = new Date();
   const weekStart = new Date(today);
@@ -50,6 +63,8 @@ export default function TimeEntryEditor({ orgId, userId, employees, jobs }: Time
   const [deleteReason, setDeleteReason] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [sortColumn, setSortColumn] = useState<SortColumn>('date');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
 
   const handleSearch = useCallback(async () => {
     setLoading(true);
@@ -106,6 +121,46 @@ export default function TimeEntryEditor({ orgId, userId, employees, jobs }: Time
     const minutes = totalMinutes % 60;
     return `${hours}h ${minutes}m`;
   };
+
+  const handleSort = (column: SortColumn | null) => {
+    if (!column) return;
+    if (sortColumn === column) {
+      setSortDirection((prev) => (prev === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortColumn(column);
+      setSortDirection('asc');
+    }
+  };
+
+  const sortedEntries = useMemo(() => {
+    return [...entries].sort((a, b) => {
+      const dir = sortDirection === 'asc' ? 1 : -1;
+      switch (sortColumn) {
+        case 'date':
+          return dir * (new Date(a.clock_in).getTime() - new Date(b.clock_in).getTime());
+        case 'employee':
+          return dir * getEmployeeName(a).localeCompare(getEmployeeName(b));
+        case 'job':
+          return dir * getJobNumber(a).localeCompare(getJobNumber(b));
+        case 'type':
+          return dir * a.entry_type.localeCompare(b.entry_type);
+        case 'clockin':
+          return dir * (new Date(a.clock_in).getTime() - new Date(b.clock_in).getTime());
+        case 'clockout': {
+          const aOut = a.clock_out ? new Date(a.clock_out).getTime() : Infinity;
+          const bOut = b.clock_out ? new Date(b.clock_out).getTime() : Infinity;
+          return dir * (aOut - bOut);
+        }
+        case 'duration': {
+          const aDur = a.clock_out ? new Date(a.clock_out).getTime() - new Date(a.clock_in).getTime() : 0;
+          const bDur = b.clock_out ? new Date(b.clock_out).getTime() - new Date(b.clock_in).getTime() : 0;
+          return dir * (aDur - bDur);
+        }
+        default:
+          return 0;
+      }
+    });
+  }, [entries, sortColumn, sortDirection, getEmployeeName, getJobNumber]);
 
   const handleEditClick = (entry: TimeEntryRow) => {
     setEditingId(entry.id);
@@ -226,13 +281,29 @@ export default function TimeEntryEditor({ orgId, userId, employees, jobs }: Time
             <table className="w-full">
               <thead>
                 <tr>
-                  {['Date', 'Employee', 'Job', 'Type', 'Clock In', 'Clock Out', 'Duration', 'Actions'].map((h) => (
-                    <th key={h} className="bg-gray-50 text-[11px] font-semibold text-text-secondary uppercase tracking-wide px-4 py-2.5 border-b border-border text-left">{h}</th>
+                  {COLUMN_CONFIG.map(({ label, key }) => (
+                    <th
+                      key={label}
+                      onClick={() => handleSort(key)}
+                      className={`bg-gray-50 text-[11px] font-semibold text-text-secondary uppercase tracking-wide px-4 py-2.5 border-b border-border text-left ${key ? 'cursor-pointer hover:bg-gray-100 select-none' : ''}`}
+                    >
+                      <span className="inline-flex items-center gap-1">
+                        {label}
+                        {key && sortColumn === key && (
+                          <span className="text-accent text-[10px]">
+                            {sortDirection === 'asc' ? '\u25B2' : '\u25BC'}
+                          </span>
+                        )}
+                        {key && sortColumn !== key && (
+                          <span className="text-gray-300 text-[10px]">{'\u25B2'}</span>
+                        )}
+                      </span>
+                    </th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {entries.map((entry) => (
+                {sortedEntries.map((entry) => (
                   <tr key={entry.id}>
                     {editingId === entry.id ? (
                       <td colSpan={8} className="px-4 py-3 border-b border-border-light">
