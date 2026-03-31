@@ -31,6 +31,7 @@ export default async function DashboardPage() {
             <Link href="/dashboard/payroll" className="text-[13px] font-medium text-text-secondary hover:text-text-primary pb-1 whitespace-nowrap">Payroll</Link>
             <Link href="/dashboard/time-entries" className="text-[13px] font-medium text-text-secondary hover:text-text-primary pb-1 whitespace-nowrap">Time Entries</Link>
             <Link href="/dashboard/manager" className="text-[13px] font-medium text-text-secondary hover:text-text-primary pb-1 whitespace-nowrap">Live View</Link>
+            <Link href="/dashboard/quickbooks" className="text-[13px] font-medium text-text-secondary hover:text-text-primary pb-1 whitespace-nowrap">QuickBooks</Link>
           </div>
         </div>
       )}

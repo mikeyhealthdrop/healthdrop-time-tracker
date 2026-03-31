@@ -39,6 +39,7 @@ export default async function TimeEntriesPage() {
           <Link href="/dashboard/payroll" className="text-[13px] font-medium text-text-secondary hover:text-text-primary pb-1 whitespace-nowrap">Payroll</Link>
           <Link href="/dashboard/time-entries" className="text-[13px] font-medium text-accent border-b-2 border-accent pb-1 whitespace-nowrap">Time Entries</Link>
           <Link href="/dashboard/manager" className="text-[13px] font-medium text-text-secondary hover:text-text-primary pb-1 whitespace-nowrap">Live View</Link>
+          <Link href="/dashboard/quickbooks" className="text-[13px] font-medium text-text-secondary hover:text-text-primary pb-1 whitespace-nowrap">QuickBooks</Link>
         </div>
       </div>
       <div className="max-w-[1200px] mx-auto px-4 sm:px-6 py-6">

@@ -1,9 +1,9 @@
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/server';
-import PayrollReport from '@/components/reports/PayrollReport';
+import QuickBooksIntegration from '@/components/admin/QuickBooksIntegration';
 
-export default async function PayrollPage() {
+export default async function QuickBooksPage() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect('/login');
@@ -24,16 +24,15 @@ export default async function PayrollPage() {
           <Link href="/dashboard/employees" className="text-[13px] font-medium text-text-secondary hover:text-text-primary pb-1 whitespace-nowrap">Employees</Link>
           <Link href="/dashboard/jobs" className="text-[13px] font-medium text-text-secondary hover:text-text-primary pb-1 whitespace-nowrap">Jobs</Link>
           <Link href="/dashboard/reports" className="text-[13px] font-medium text-text-secondary hover:text-text-primary pb-1 whitespace-nowrap">Job Cost Report</Link>
-          <Link href="/dashboard/payroll" className="text-[13px] font-medium text-accent border-b-2 border-accent pb-1 whitespace-nowrap">Payroll</Link>
+          <Link href="/dashboard/payroll" className="text-[13px] font-medium text-text-secondary hover:text-text-primary pb-1 whitespace-nowrap">Payroll</Link>
           <Link href="/dashboard/time-entries" className="text-[13px] font-medium text-text-secondary hover:text-text-primary pb-1 whitespace-nowrap">Time Entries</Link>
           <Link href="/dashboard/manager" className="text-[13px] font-medium text-text-secondary hover:text-text-primary pb-1 whitespace-nowrap">Live View</Link>
-          <Link href="/dashboard/quickbooks" className="text-[13px] font-medium text-text-secondary hover:text-text-primary pb-1 whitespace-nowrap">QuickBooks</Link>
+          <Link href="/dashboard/quickbooks" className="text-[13px] font-medium text-accent border-b-2 border-accent pb-1 whitespace-nowrap">QuickBooks</Link>
         </div>
       </div>
-      <div className="max-w-[1200px] mx-auto px-4 sm:px-6 py-6">
-        <h1 className="text-[18px] font-bold text-text-primary mb-6">Payroll Report</h1>
-        <p className="text-[13px] text-text-secondary mb-4">View and export payroll data by employee</p>
-        <PayrollReport orgId={profile.org_id} />
+      <div className="max-w-[800px] mx-auto px-4 sm:px-6 py-6">
+        <h1 className="text-[18px] font-bold text-text-primary mb-6">QuickBooks Integration</h1>
+        <QuickBooksIntegration orgId={profile.org_id} />
       </div>
     </div>
   );
