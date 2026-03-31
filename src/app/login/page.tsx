@@ -67,10 +67,7 @@ export default function LoginPage() {
         <div className="bg-surface border border-border rounded-[10px] p-8 shadow-md">
           {!showReset ? (
             <>
-              <h1 className="text-xl font-bold text-center mb-1">Sign In</h1>
-              <p className="text-[13px] text-text-secondary text-center mb-6">
-                Use your Healthdrop email
-              </p>
+              <h1 className="text-xl font-bold text-center mb-6">Sign In</h1>
 
               <form onSubmit={handleLogin}>
                 <div className="mb-4">
