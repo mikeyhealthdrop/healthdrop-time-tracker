@@ -2,7 +2,13 @@
 
 import { useState, useEffect } from 'react';
 import { formatCurrency } from '@/lib/utils';
-import { getEmployees, createEmployee, updateEmployee, deactivateEmployee, reactivateEmployee } from '@/app/actions/employees';
+import {
+  getEmployees,
+  createEmployee,
+  updateEmployee,
+  deactivateEmployee,
+  reactivateEmployee,
+} from '@/app/actions/employees';
 
 interface Employee {
   id: string;
@@ -27,6 +33,9 @@ export default function EmployeeManagement({ orgId }: EmployeeManagementProps) {
   const [showInactive, setShowInactive] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
+  const [sendingResetFor, setSendingResetFor] = useState<string | null>(null);
+  const [resetSentFor, setResetSentFor] = useState<Set<string>>(new Set());
+  const [resetMessage, setResetMessage] = useState<string | null>(null);
 
   // Form state
   const [formEmail, setFormEmail] = useState('');
@@ -93,6 +102,7 @@ export default function EmployeeManagement({ orgId }: EmployeeManagementProps) {
     try {
       setSaving(true);
       setError(null);
+
       if (editingEmployee) {
         const result = await updateEmployee(editingEmployee.id, orgId, {
           firstName: formFirstName,
@@ -122,6 +132,7 @@ export default function EmployeeManagement({ orgId }: EmployeeManagementProps) {
           return;
         }
       }
+
       await loadEmployees();
       handleCloseModal();
     } catch (err) {
@@ -160,25 +171,63 @@ export default function EmployeeManagement({ orgId }: EmployeeManagementProps) {
     }
   };
 
+  const handleSendPasswordReset = async (email: string) => {
+    try {
+      setSendingResetFor(email);
+      setResetMessage(null);
+      setError(null);
+
+      const res = await fetch('/api/auth/reset-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setError(data.error || 'Failed to send password reset');
+        return;
+      }
+
+      setResetSentFor(prev => new Set(prev).add(email));
+      setResetMessage(`Password reset email sent to ${email}`);
+      setTimeout(() => setResetMessage(null), 5000);
+    } catch (err) {
+      setError('Failed to send password reset email');
+      console.error(err);
+    } finally {
+      setSendingResetFor(null);
+    }
+  };
+
   const filteredEmployees = showInactive
     ? employees
     : employees.filter(emp => emp.is_active !== false);
 
   const getEmployeeTypeBadge = (type: string) => {
     switch (type) {
-      case 'w2': return { label: 'W-2', classes: 'bg-blue-100 text-blue-700' };
-      case 'agency': return { label: 'Agency', classes: 'bg-purple-100 text-purple-700' };
-      case 'contractor_1099': return { label: '1099', classes: 'bg-orange-100 text-orange-700' };
-      default: return { label: type, classes: 'bg-gray-100 text-gray-700' };
+      case 'w2':
+        return { label: 'W-2', classes: 'bg-blue-100 text-blue-700' };
+      case 'agency':
+        return { label: 'Agency', classes: 'bg-purple-100 text-purple-700' };
+      case 'contractor_1099':
+        return { label: '1099', classes: 'bg-orange-100 text-orange-700' };
+      default:
+        return { label: type, classes: 'bg-gray-100 text-gray-700' };
     }
   };
 
   const getRoleBadge = (role: string) => {
     switch (role) {
-      case 'admin': return { label: 'Admin', classes: 'bg-red-100 text-red-700' };
-      case 'manager': return { label: 'Manager', classes: 'bg-orange-100 text-orange-700' };
-      case 'employee': return { label: 'Employee', classes: 'bg-green-100 text-green-700' };
-      default: return { label: role, classes: 'bg-gray-100 text-gray-700' };
+      case 'admin':
+        return { label: 'Admin', classes: 'bg-red-100 text-red-700' };
+      case 'manager':
+        return { label: 'Manager', classes: 'bg-orange-100 text-orange-700' };
+      case 'employee':
+        return { label: 'Employee', classes: 'bg-green-100 text-green-700' };
+      default:
+        return { label: role, classes: 'bg-gray-100 text-gray-700' };
     }
   };
 
@@ -195,6 +244,12 @@ export default function EmployeeManagement({ orgId }: EmployeeManagementProps) {
       {error && (
         <div className="bg-surface border border-red-200 rounded-[10px] p-4 text-red-700 text-[13px]">
           {error}
+        </div>
+      )}
+
+      {resetMessage && (
+        <div className="bg-surface border border-green-200 rounded-[10px] p-4 text-green-700 text-[13px]">
+          {resetMessage}
         </div>
       )}
 
@@ -270,11 +325,41 @@ export default function EmployeeManagement({ orgId }: EmployeeManagementProps) {
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
-                          <button onClick={() => handleEditEmployee(employee)} className="text-[12px] font-medium text-accent hover:text-accent-hover transition-colors">Edit</button>
+                          <button
+                            onClick={() => handleEditEmployee(employee)}
+                            className="text-[12px] font-medium text-accent hover:text-accent-hover transition-colors"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => handleSendPasswordReset(employee.email)}
+                            disabled={sendingResetFor === employee.email}
+                            className={`text-[12px] font-medium transition-colors ${
+                              resetSentFor.has(employee.email)
+                                ? 'text-green-600'
+                                : 'text-blue-600 hover:text-blue-800'
+                            } disabled:opacity-50`}
+                          >
+                            {sendingResetFor === employee.email
+                              ? 'Sending...'
+                              : resetSentFor.has(employee.email)
+                              ? 'Sent'
+                              : 'Send Reset'}
+                          </button>
                           {employee.is_active !== false ? (
-                            <button onClick={() => handleDeactivate(employee.id)} className="text-[12px] font-medium text-red-600 hover:text-red-800 transition-colors">Deactivate</button>
+                            <button
+                              onClick={() => handleDeactivate(employee.id)}
+                              className="text-[12px] font-medium text-red-600 hover:text-red-800 transition-colors"
+                            >
+                              Deactivate
+                            </button>
                           ) : (
-                            <button onClick={() => handleReactivate(employee.id)} className="text-[12px] font-medium text-green-600 hover:text-green-800 transition-colors">Reactivate</button>
+                            <button
+                              onClick={() => handleReactivate(employee.id)}
+                              className="text-[12px] font-medium text-green-600 hover:text-green-800 transition-colors"
+                            >
+                              Reactivate
+                            </button>
                           )}
                         </div>
                       </td>
@@ -301,25 +386,45 @@ export default function EmployeeManagement({ orgId }: EmployeeManagementProps) {
             {!editingEmployee && (
               <div>
                 <label className="block text-[13px] font-medium text-text-primary mb-1">Email</label>
-                <input type="email" value={formEmail} onChange={(e) => setFormEmail(e.target.value)} className="w-full px-3.5 py-2.5 border border-border rounded-sm text-[14px]" placeholder="employee@example.com" />
+                <input
+                  type="email"
+                  value={formEmail}
+                  onChange={(e) => setFormEmail(e.target.value)}
+                  className="w-full px-3.5 py-2.5 border border-border rounded-sm text-[14px]"
+                  placeholder="employee@example.com"
+                />
               </div>
             )}
 
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-[13px] font-medium text-text-primary mb-1">First Name</label>
-                <input type="text" value={formFirstName} onChange={(e) => setFormFirstName(e.target.value)} className="w-full px-3.5 py-2.5 border border-border rounded-sm text-[14px]" />
+                <input
+                  type="text"
+                  value={formFirstName}
+                  onChange={(e) => setFormFirstName(e.target.value)}
+                  className="w-full px-3.5 py-2.5 border border-border rounded-sm text-[14px]"
+                />
               </div>
               <div>
                 <label className="block text-[13px] font-medium text-text-primary mb-1">Last Name</label>
-                <input type="text" value={formLastName} onChange={(e) => setFormLastName(e.target.value)} className="w-full px-3.5 py-2.5 border border-border rounded-sm text-[14px]" />
+                <input
+                  type="text"
+                  value={formLastName}
+                  onChange={(e) => setFormLastName(e.target.value)}
+                  className="w-full px-3.5 py-2.5 border border-border rounded-sm text-[14px]"
+                />
               </div>
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-[13px] font-medium text-text-primary mb-1">Role</label>
-                <select value={formRole} onChange={(e) => setFormRole(e.target.value as any)} className="w-full px-3.5 py-2.5 border border-border rounded-sm text-[14px]">
+                <select
+                  value={formRole}
+                  onChange={(e) => setFormRole(e.target.value as any)}
+                  className="w-full px-3.5 py-2.5 border border-border rounded-sm text-[14px]"
+                >
                   <option value="employee">Employee</option>
                   <option value="manager">Manager</option>
                   <option value="admin">Admin</option>
@@ -327,7 +432,11 @@ export default function EmployeeManagement({ orgId }: EmployeeManagementProps) {
               </div>
               <div>
                 <label className="block text-[13px] font-medium text-text-primary mb-1">Type</label>
-                <select value={formEmployeeType} onChange={(e) => setFormEmployeeType(e.target.value as any)} className="w-full px-3.5 py-2.5 border border-border rounded-sm text-[14px]">
+                <select
+                  value={formEmployeeType}
+                  onChange={(e) => setFormEmployeeType(e.target.value as any)}
+                  className="w-full px-3.5 py-2.5 border border-border rounded-sm text-[14px]"
+                >
                   <option value="w2">W-2</option>
                   <option value="agency">Agency</option>
                   <option value="contractor_1099">1099 Contractor</option>
@@ -338,17 +447,35 @@ export default function EmployeeManagement({ orgId }: EmployeeManagementProps) {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-[13px] font-medium text-text-primary mb-1">Base Rate ($/hr)</label>
-                <input type="number" step="0.01" min="0" value={formBaseRate} onChange={(e) => setFormBaseRate(e.target.value)} className="w-full px-3.5 py-2.5 border border-border rounded-sm text-[14px]" />
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={formBaseRate}
+                  onChange={(e) => setFormBaseRate(e.target.value)}
+                  className="w-full px-3.5 py-2.5 border border-border rounded-sm text-[14px]"
+                />
               </div>
               <div>
                 <label className="block text-[13px] font-medium text-text-primary mb-1">Loaded Rate ($/hr)</label>
-                <input type="number" step="0.01" min="0" value={formLoadedRate} onChange={(e) => setFormLoadedRate(e.target.value)} className="w-full px-3.5 py-2.5 border border-border rounded-sm text-[14px]" />
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={formLoadedRate}
+                  onChange={(e) => setFormLoadedRate(e.target.value)}
+                  className="w-full px-3.5 py-2.5 border border-border rounded-sm text-[14px]"
+                />
               </div>
             </div>
 
             <div className="flex gap-2 justify-end pt-2">
               <button onClick={handleCloseModal} className="px-3.5 py-2.5 border border-border rounded-sm text-[13px] font-medium text-text-primary hover:bg-gray-50">Cancel</button>
-              <button onClick={handleSaveEmployee} disabled={saving} className="px-3.5 py-2.5 bg-accent hover:bg-accent-hover text-white rounded-sm text-[13px] font-medium disabled:opacity-50">
+              <button
+                onClick={handleSaveEmployee}
+                disabled={saving}
+                className="px-3.5 py-2.5 bg-accent hover:bg-accent-hover text-white rounded-sm text-[13px] font-medium disabled:opacity-50"
+              >
                 {saving ? 'Saving...' : editingEmployee ? 'Update' : 'Create'}
               </button>
             </div>
