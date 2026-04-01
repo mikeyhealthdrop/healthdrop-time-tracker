@@ -47,6 +47,7 @@ export default function QuickBooksIntegration({ orgId }: QuickBooksIntegrationPr
   // Check URL params for connection result
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
+
     if (params.get('connected') === 'true') {
       setIsConnected(true)
       setError('')
@@ -55,6 +56,7 @@ export default function QuickBooksIntegration({ orgId }: QuickBooksIntegrationPr
       // Auto-sync after connecting
       handleSync()
     }
+
     const errorParam = params.get('error')
     if (errorParam) {
       const errorMessages: Record<string, string> = {
@@ -133,9 +135,7 @@ export default function QuickBooksIntegration({ orgId }: QuickBooksIntegrationPr
             <div>
               <h2 className="text-[15px] font-semibold text-text-primary">QuickBooks Online</h2>
               <div className="flex items-center gap-1.5 mt-0.5">
-                <span
-                  className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green' : 'bg-text-muted'}`}
-                />
+                <span className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green' : 'bg-text-muted'}`} />
                 <span className="text-[12px] text-text-secondary">
                   {isConnected ? 'Connected' : 'Not connected'}
                 </span>
@@ -172,7 +172,7 @@ export default function QuickBooksIntegration({ orgId }: QuickBooksIntegrationPr
         {/* Description */}
         <p className="text-[13px] text-text-secondary">
           {isConnected
-            ? 'QuickBooks Projects are automatically synced as jobs every hour. You can also sync manually.'
+            ? 'QuickBooks Projects are automatically synced as jobs every day. You can also sync manually.'
             : 'Connect your QuickBooks Online account to automatically sync Projects as jobs in the time tracker.'}
         </p>
 
@@ -196,9 +196,9 @@ export default function QuickBooksIntegration({ orgId }: QuickBooksIntegrationPr
           <p className="text-[13px] text-green font-medium">{syncResult.message}</p>
           <div className="mt-2 text-[12px] text-text-secondary">
             <span>QBO Projects found: {syncResult.total_qbo_projects}</span>
-            <span className="mx-2">·</span>
+            <span className="mx-2">&middot;</span>
             <span>New jobs added: {syncResult.added}</span>
-            <span className="mx-2">·</span>
+            <span className="mx-2">&middot;</span>
             <span>Already synced: {syncResult.skipped}</span>
           </div>
         </div>
@@ -209,7 +209,7 @@ export default function QuickBooksIntegration({ orgId }: QuickBooksIntegrationPr
         <h3 className="text-[14px] font-semibold text-text-primary mb-3">How it works</h3>
         <div className="space-y-2 text-[13px] text-text-secondary">
           <p>1. Connect your QuickBooks Online account using the button above.</p>
-          <p>2. Your QBO Projects are automatically synced as jobs every hour.</p>
+          <p>2. Your QBO Projects are automatically synced as jobs every day.</p>
           <p>3. New projects added in QuickBooks will appear as jobs automatically.</p>
           <p>4. Existing jobs with matching names are linked but not duplicated.</p>
           <p>5. Disconnecting QuickBooks will stop syncing but won&apos;t remove existing jobs.</p>
