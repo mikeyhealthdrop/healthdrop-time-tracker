@@ -21,8 +21,9 @@ export async function getEmployees(orgId: string) {
 
 /**
  * Create a new employee profile (admin only)
- * Creates auth user via inviteUserByEmail, which sends them an email
- * to set their password. Then creates the profile row with auth_id linked.
+ * First inserts the profile row (without auth_id), then invites via Supabase Auth.
+ * The database trigger (handle_new_user) automatically links the auth_id
+ * to the pre-created profile row when the auth user is created.
  */
 export async function createEmployee(
   orgId: string,
@@ -50,27 +51,12 @@ export async function createEmployee(
     return { error: 'An employee with this email already exists.' }
   }
 
-  // Use service client to invite the user via Supabase Auth
-  // This creates an auth account AND sends them an email to set their password
-  const serviceClient = await createServiceClient()
-  const { data: inviteData, error: inviteError } = await serviceClient.auth.admin.inviteUserByEmail(data.email, {
-    redirectTo: `${process.env.NEXT_PUBLIC_APP_URL || 'https://jobclockin.com'}/auth/callback?type=recovery`,
-    data: {
-      first_name: data.firstName,
-      last_name: data.lastName,
-    }
-  })
-
-  if (inviteError) {
-    return { error: `Failed to invite employee: ${inviteError.message}` }
-  }
-
-  // Create the user profile with the auth_id linked
+  // Create the user profile first (without auth_id)
+  // The database trigger will link auth_id when the invite is accepted
   const { error } = await supabase
     .from('users')
     .insert({
       org_id: orgId,
-      auth_id: inviteData.user.id,
       email: data.email,
       first_name: data.firstName,
       last_name: data.lastName,
@@ -81,6 +67,24 @@ export async function createEmployee(
     })
 
   if (error) return { error: error.message }
+
+  // Now invite the user via Supabase Auth
+  // This creates an auth account and sends them an email to set their password
+  // The handle_new_user trigger will automatically link the auth_id to the profile above
+  const serviceClient = await createServiceClient()
+  const { error: inviteError } = await serviceClient.auth.admin.inviteUserByEmail(data.email, {
+    redirectTo: `${process.env.NEXT_PUBLIC_APP_URL || 'https://jobclockin.com'}/auth/callback?type=recovery`,
+    data: {
+      first_name: data.firstName,
+      last_name: data.lastName,
+    }
+  })
+
+  if (inviteError) {
+    // Profile was created but invite failed - still return success since profile exists
+    // Admin can use the "Send Reset" button to retry the invite later
+    console.error('Invite email failed:', inviteError.message)
+  }
 
   revalidatePath('/dashboard/employees')
   return { success: true }
