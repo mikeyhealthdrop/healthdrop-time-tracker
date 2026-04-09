@@ -21,8 +21,8 @@ export async function getEmployees(orgId: string) {
 
 /**
  * Create a new employee profile (admin only)
- * Creates auth user via service client, then the trigger creates the profile.
- * We then update the profile with the additional fields.
+ * Creates auth user via inviteUserByEmail, which sends them an email
+ * to set their password. Then creates the profile row with auth_id linked.
  */
 export async function createEmployee(
   orgId: string,
@@ -50,11 +50,27 @@ export async function createEmployee(
     return { error: 'An employee with this email already exists.' }
   }
 
-  // Create the user profile first (without auth_id — they'll sign up later)
+  // Use service client to invite the user via Supabase Auth
+  // This creates an auth account AND sends them an email to set their password
+  const serviceClient = await createServiceClient()
+  const { data: inviteData, error: inviteError } = await serviceClient.auth.admin.inviteUserByEmail(data.email, {
+    redirectTo: `${process.env.NEXT_PUBLIC_APP_URL || 'https://jobclockin.com'}/auth/callback?type=recovery`,
+    data: {
+      first_name: data.firstName,
+      last_name: data.lastName,
+    }
+  })
+
+  if (inviteError) {
+    return { error: `Failed to invite employee: ${inviteError.message}` }
+  }
+
+  // Create the user profile with the auth_id linked
   const { error } = await supabase
     .from('users')
     .insert({
       org_id: orgId,
+      auth_id: inviteData.user.id,
       email: data.email,
       first_name: data.firstName,
       last_name: data.lastName,
