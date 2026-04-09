@@ -7,6 +7,7 @@ export async function GET(request: NextRequest) {
   const code = searchParams.get('code')
   const type = searchParams.get('type')
 
+  // PKCE flow - code is in query params (server-side exchange)
   if (code) {
     const cookiesToSet: Array<{ name: string; value: string; options?: any }> = []
 
@@ -31,7 +32,6 @@ export async function GET(request: NextRequest) {
     const { error } = await supabase.auth.exchangeCodeForSession(code)
 
     if (!error) {
-      // Determine redirect destination
       const redirectPath = type === 'recovery' ? '/auth/update-password' : '/dashboard'
       const response = NextResponse.redirect(`${origin}${redirectPath}`)
 
@@ -44,10 +44,22 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  // If it's a password recovery without a code (or code exchange failed), still redirect
-  if (type === 'recovery') {
-    return NextResponse.redirect(`${origin}/auth/update-password`)
-  }
+  // Implicit flow - tokens are in the URL hash fragment (not visible server-side)
+  // Return an HTML page that reads the hash and forwards it to the destination
+  // The Supabase browser client on the destination page will detect the tokens
+  const redirectPath = type === 'recovery' ? '/auth/update-password' : '/dashboard'
 
-  return NextResponse.redirect(`${origin}/dashboard`)
+  const html = `<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Redirecting...</title></head>
+<body>
+<noscript>Redirecting to <a href="${redirectPath}">${redirectPath}</a></noscript>
+<script>
+  // Forward any hash fragment (access_token, refresh_token) to the destination page
+  window.location.replace("${redirectPath}" + window.location.hash);
+</script>
+</body></html>`
+
+  return new NextResponse(html, {
+    headers: { 'Content-Type': 'text/html' },
+  })
 }
