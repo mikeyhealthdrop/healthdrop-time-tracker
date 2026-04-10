@@ -1,1 +1,160 @@
+'use client'
 
+import { useState, useEffect } from 'react'
+import { createClient } from '@/lib/supabase/client'
+import { useRouter } from 'next/navigation'
+
+export default function UpdatePasswordPage() {
+  const [password, setPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [ready, setReady] = useState(false)
+  const router = useRouter()
+  const supabase = createClient()
+
+  useEffect(() => {
+    // Handle token_hash from query params (new email template flow)
+    const urlParams = new URLSearchParams(window.location.search)
+    const tokenHash = urlParams.get('token_hash')
+    const type = urlParams.get('type')
+    
+    if (tokenHash) {
+      supabase.auth.verifyOtp({
+        token_hash: tokenHash,
+        type: type === 'invite' ? 'invite' : 'recovery',
+      }).then(({ error: otpError }) => {
+        if (otpError) {
+          setError('Session error: ' + otpError.message)
+        }
+        window.history.replaceState(null, '', window.location.pathname)
+        setReady(true)
+      })
+      return
+    }
+
+    // Handle hash fragment tokens (legacy implicit flow)
+    const hash = window.location.hash.substring(1)
+    if (hash) {
+      const params = new URLSearchParams(hash)
+      const accessToken = params.get('access_token')
+      const refreshToken = params.get('refresh_token')
+      if (accessToken && refreshToken) {
+        supabase.auth.setSession({
+          access_token: accessToken,
+          refresh_token: refreshToken,
+        }).then(({ error: sessionError }) => {
+          if (sessionError) {
+            setError('Session error: ' + sessionError.message)
+          }
+          window.history.replaceState(null, '', window.location.pathname)
+          setReady(true)
+        })
+        return
+      }
+    }
+    setReady(true)
+  }, [])
+
+  async function handleUpdate(e: React.FormEvent) {
+    e.preventDefault()
+    setError('')
+
+    if (password !== confirmPassword) {
+      setError('Passwords do not match')
+      return
+    }
+
+    if (password.length < 6) {
+      setError('Password must be at least 6 characters')
+      return
+    }
+
+    setLoading(true)
+
+    const { error } = await supabase.auth.updateUser({ password })
+
+    if (error) {
+      setError(error.message)
+      setLoading(false)
+      return
+    }
+
+    router.push('/dashboard')
+    router.refresh()
+  }
+
+  if (!ready) {
+    return (
+      <div className="min-h-screen flex items-center justify-center" style={{ background: '#f5f5f0' }}>
+        <p className="text-text-secondary">Setting up your session...</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="min-h-screen flex items-start justify-center pt-20 px-5" style={{ background: '#f5f5f0' }}>
+      <div className="w-full max-w-[380px]">
+        <div className="text-center mb-6">
+          <div className="w-12 h-12 bg-accent rounded-lg flex items-center justify-center text-white font-bold text-xl mx-auto mb-3">
+            H
+          </div>
+          <div className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">
+            Healthdrop Time Tracker
+          </div>
+        </div>
+
+        <div className="bg-surface border border-border rounded-[10px] p-8 shadow-md">
+          <h1 className="text-xl font-bold text-center mb-1">Set New Password</h1>
+          <p className="text-[13px] text-text-secondary text-center mb-6">
+            Enter your new password below
+          </p>
+
+          <form onSubmit={handleUpdate}>
+            <div className="mb-4">
+              <label className="block text-[13px] font-medium text-text-primary mb-1.5">
+                New Password
+              </label>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="â¢â¢â¢â¢â¢â¢â¢â¢"
+                required
+                className="w-full px-3.5 py-2.5 border border-border rounded-sm text-[14px] text-text-primary bg-surface focus:outline-none focus:border-accent focus:ring-[3px] focus:ring-accent-light transition-colors"
+              />
+            </div>
+
+            <div className="mb-4">
+              <label className="block text-[13px] font-medium text-text-primary mb-1.5">
+                Confirm Password
+              </label>
+              <input
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                placeholder="â¢â¢â¢â¢â¢â¢â¢â¢"
+                required
+                className="w-full px-3.5 py-2.5 border border-border rounded-sm text-[14px] text-text-primary bg-surface focus:outline-none focus:border-accent focus:ring-[3px] focus:ring-accent-light transition-colors"
+              />
+            </div>
+
+            {error && (
+              <div className="text-red text-[13px] mb-3 p-2 bg-red-light rounded-sm">
+                {error}
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full mt-2 py-3.5 bg-accent hover:bg-accent-hover text-white font-semibold text-[16px] rounded-[10px] transition-colors disabled:opacity-50"
+            >
+              {loading ? 'Updating...' : 'Update Password'}
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+  )
+}
