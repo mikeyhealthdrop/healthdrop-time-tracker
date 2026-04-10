@@ -69,9 +69,3 @@ export async function GET(request: NextRequest) {
     headers: { 'Content-Type': 'text/html' },
   })
 }
-
-
-  return new NextResponse(html, {
-    headers: { 'Content-Type': 'text/html' },
-  })
-}
