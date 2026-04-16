@@ -41,6 +41,8 @@ export default async function DashboardPage() {
         <div className="bg-surface border-b border-border-light px-4 sm:px-6 py-2">
           <div className="max-w-[1200px] mx-auto flex gap-4">
             <Link href="/dashboard" className="text-[13px] font-medium text-accent border-b-2 border-accent pb-1">Time Clock</Link>
+            <Link href="/dashboard/jobs" className="text-[13px] font-medium text-text-secondary hover:text-text-primary pb-1 whitespace-nowrap">Jobs</Link>
+            <Link href="/dashboard/reports" className="text-[13px] font-medium text-text-secondary hover:text-text-primary pb-1 whitespace-nowrap">Job Cost Report</Link>
             <Link href="/dashboard/manager" className="text-[13px] font-medium text-text-secondary hover:text-text-primary pb-1">Live View</Link>
           </div>
         </div>
