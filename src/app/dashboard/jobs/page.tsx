@@ -14,7 +14,7 @@ export default async function JobsPage() {
     .eq('auth_id', user.id)
     .single();
 
-  if (!profile || profile.role !== 'admin') redirect('/dashboard');
+  if (!profile || (profile.role !== 'admin' && profile.role !== 'manager')) redirect('/dashboard');
 
   return (
     <div>
