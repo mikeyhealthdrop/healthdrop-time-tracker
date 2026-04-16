@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { TopBar } from '@/components/TopBar'
+import Link from 'next/link'
 
 export default async function DashboardLayout({
   children,
@@ -22,10 +23,28 @@ export default async function DashboardLayout({
     .single()
 
   if (!profile) {
-    // User exists in auth but not in our users table - shouldn't happen
-    // but handle gracefully
     redirect('/login')
   }
+
+  const adminLinks = [
+    { href: '/dashboard', label: 'Time Clock' },
+    { href: '/dashboard/employees', label: 'Employees' },
+    { href: '/dashboard/jobs', label: 'Jobs' },
+    { href: '/dashboard/reports', label: 'Job Cost Report' },
+    { href: '/dashboard/payroll', label: 'Payroll' },
+    { href: '/dashboard/time-entries', label: 'Time Entries' },
+    { href: '/dashboard/manager', label: 'Live View' },
+    { href: '/dashboard/quickbooks', label: 'QuickBooks' },
+  ]
+
+  const managerLinks = [
+    { href: '/dashboard', label: 'Time Clock' },
+    { href: '/dashboard/jobs', label: 'Jobs' },
+    { href: '/dashboard/reports', label: 'Job Cost Report' },
+    { href: '/dashboard/manager', label: 'Live View' },
+  ]
+
+  const navLinks = profile.role === 'admin' ? adminLinks : profile.role === 'manager' ? managerLinks : []
 
   return (
     <div className="min-h-screen" style={{ background: '#f5f5f0' }}>
@@ -34,6 +53,19 @@ export default async function DashboardLayout({
         role={profile.role}
         orgName={profile.organization?.name || 'Healthdrop'}
       />
+      {navLinks.length > 0 && (
+        <nav className="bg-white border-b px-6 py-2 flex gap-4 flex-wrap">
+          {navLinks.map((link) => (
+            <Link
+              key={link.href}
+              href={link.href}
+              className="px-3 py-1.5 text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-100 rounded transition-colors"
+            >
+              {link.label}
+            </Link>
+          ))}
+        </nav>
+      )}
       <main>
         {children}
       </main>
