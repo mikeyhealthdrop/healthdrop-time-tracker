@@ -46,6 +46,16 @@ const COLUMN_CONFIG: { label: string; key: SortColumn | null }[] = [
   { label: 'Actions', key: null },
 ];
 
+// Format a Date as YYYY-MM-DDTHH:MM in local time (for datetime-local inputs)
+function toLocalDatetimeString(date) {
+  const y = date.getFullYear();
+  const mo = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  const h = String(date.getHours()).padStart(2, '0');
+  const mi = String(date.getMinutes()).padStart(2, '0');
+  return y + '-' + mo + '-' + d + 'T' + h + ':' + mi;
+}
+
 export default function TimeEntryEditor({ orgId, userId, employees, jobs }: TimeEntryEditorProps) {
   const today = new Date();
   const weekStart = new Date(today);
@@ -165,8 +175,8 @@ export default function TimeEntryEditor({ orgId, userId, employees, jobs }: Time
   const handleEditClick = (entry: TimeEntryRow) => {
     setEditingId(entry.id);
     setEditFormData({
-      clock_in: new Date(entry.clock_in).toISOString().slice(0, 16),
-      clock_out: entry.clock_out ? new Date(entry.clock_out).toISOString().slice(0, 16) : '',
+      clock_in: toLocalDatetimeString(new Date(entry.clock_in)),
+      clock_out: entry.clock_out ? toLocalDatetimeString(new Date(entry.clock_out)) : '',
       job_id: entry.job_id || '',
       reason: '',
     });
