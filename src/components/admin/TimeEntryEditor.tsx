@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useCallback, useMemo } from 'react';
-import { getTimeEntriesForAdmin, editTimeEntry, deleteTimeEntry } from '@/app/actions/time-entry-edits';
+import { getTimeEntriesForAdmin, editTimeEntry, deleteTimeEntry, addTimeEntry } from '@/app/actions/time-entry-edits';
 
 interface TimeEntryRow {
   id: string;
@@ -47,7 +47,7 @@ const COLUMN_CONFIG: { label: string; key: SortColumn | null }[] = [
 ];
 
 // Format a Date as YYYY-MM-DDTHH:MM in local time (for datetime-local inputs)
-function toLocalDatetimeString(date) {
+function toLocalDatetimeString(date: Date) {
   const y = date.getFullYear();
   const mo = String(date.getMonth() + 1).padStart(2, '0');
   const d = String(date.getDate()).padStart(2, '0');
@@ -75,6 +75,16 @@ export default function TimeEntryEditor({ orgId, userId, employees, jobs }: Time
   const [actionError, setActionError] = useState<string | null>(null);
   const [sortColumn, setSortColumn] = useState<SortColumn>('date');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
+
+  // Add entry state
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [addFormData, setAddFormData] = useState({
+    employee_id: '',
+    clock_in: '',
+    clock_out: '',
+    job_id: '',
+    entry_type: 'work' as 'work' | 'lunch',
+  });
 
   const handleSearch = useCallback(async () => {
     setLoading(true);
@@ -106,7 +116,7 @@ export default function TimeEntryEditor({ orgId, userId, employees, jobs }: Time
 
   const getJobNumber = useCallback((entry: TimeEntryRow) => {
     if (entry.job) return entry.job.job_number;
-    if (!entry.job_id) return '—';
+    if (!entry.job_id) return '\u2014';
     const job = jobs.find((j) => j.id === entry.job_id);
     return job ? job.job_number : 'Unknown';
   }, [jobs]);
@@ -245,6 +255,41 @@ export default function TimeEntryEditor({ orgId, userId, employees, jobs }: Time
     }
   };
 
+  const handleAddEntry = async () => {
+    if (!addFormData.employee_id) {
+      setActionError('Please select an employee');
+      return;
+    }
+    if (!addFormData.clock_in) {
+      setActionError('Clock in time is required');
+      return;
+    }
+    setActionLoading(true);
+    setActionError(null);
+    try {
+      const result = await addTimeEntry(orgId, userId, {
+        userId: addFormData.employee_id,
+        clockIn: new Date(addFormData.clock_in).toISOString(),
+        clockOut: addFormData.clock_out ? new Date(addFormData.clock_out).toISOString() : null,
+        jobId: addFormData.job_id || null,
+        entryType: addFormData.entry_type,
+      });
+      if (result.error) {
+        setActionError(result.error);
+      } else {
+        if (result.data) {
+          setEntries((prev) => [result.data, ...prev]);
+        }
+        setShowAddForm(false);
+        setAddFormData({ employee_id: '', clock_in: '', clock_out: '', job_id: '', entry_type: 'work' });
+      }
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'An error occurred');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   const isInitialLoad = entries.length === 0 && !loading && !error;
 
   return (
@@ -268,13 +313,69 @@ export default function TimeEntryEditor({ orgId, userId, employees, jobs }: Time
               ))}
             </select>
           </div>
-          <div className="flex items-end">
-            <button onClick={handleSearch} disabled={loading} className="w-full bg-accent hover:bg-accent-hover text-white px-3.5 py-2.5 rounded-sm text-[14px] font-medium disabled:opacity-50 disabled:cursor-not-allowed">
+          <div className="flex items-end gap-2">
+            <button onClick={handleSearch} disabled={loading} className="flex-1 bg-accent hover:bg-accent-hover text-white px-3.5 py-2.5 rounded-sm text-[14px] font-medium disabled:opacity-50 disabled:cursor-not-allowed">
               {loading ? 'Searching...' : 'Search'}
+            </button>
+            <button
+              onClick={() => { setShowAddForm(true); setActionError(null); }}
+              className="bg-green-600 hover:bg-green-700 text-white px-3.5 py-2.5 rounded-sm text-[14px] font-medium whitespace-nowrap"
+            >
+              + Add Entry
             </button>
           </div>
         </div>
       </div>
+
+      {/* Add Entry Form */}
+      {showAddForm && (
+        <div className="bg-surface border border-green-300 rounded-[10px] p-5 shadow-sm space-y-4">
+          <h3 className="text-[14px] font-semibold text-text-primary">Add Time Entry</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            <div>
+              <label className="block text-[13px] font-medium text-text-primary mb-1">Employee *</label>
+              <select value={addFormData.employee_id} onChange={(e) => setAddFormData({ ...addFormData, employee_id: e.target.value })} className="w-full px-3.5 py-2.5 border border-border rounded-sm text-[14px]">
+                <option value="">Select Employee</option>
+                {employees.map((emp) => (
+                  <option key={emp.id} value={emp.id}>{emp.first_name} {emp.last_name}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-[13px] font-medium text-text-primary mb-1">Clock In *</label>
+              <input type="datetime-local" value={addFormData.clock_in} onChange={(e) => setAddFormData({ ...addFormData, clock_in: e.target.value })} className="w-full px-3.5 py-2.5 border border-border rounded-sm text-[14px]" />
+            </div>
+            <div>
+              <label className="block text-[13px] font-medium text-text-primary mb-1">Clock Out</label>
+              <input type="datetime-local" value={addFormData.clock_out} onChange={(e) => setAddFormData({ ...addFormData, clock_out: e.target.value })} className="w-full px-3.5 py-2.5 border border-border rounded-sm text-[14px]" />
+            </div>
+            <div>
+              <label className="block text-[13px] font-medium text-text-primary mb-1">Job</label>
+              <select value={addFormData.job_id} onChange={(e) => setAddFormData({ ...addFormData, job_id: e.target.value })} className="w-full px-3.5 py-2.5 border border-border rounded-sm text-[14px]">
+                <option value="">No Job</option>
+                {jobs.map((job) => (
+                  <option key={job.id} value={job.id}>{job.job_number}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-[13px] font-medium text-text-primary mb-1">Type</label>
+              <select value={addFormData.entry_type} onChange={(e) => setAddFormData({ ...addFormData, entry_type: e.target.value as 'work' | 'lunch' })} className="w-full px-3.5 py-2.5 border border-border rounded-sm text-[14px]">
+                <option value="work">Work</option>
+                <option value="lunch">Lunch</option>
+              </select>
+            </div>
+          </div>
+          <div className="flex gap-2 justify-end">
+            <button onClick={() => { setShowAddForm(false); setAddFormData({ employee_id: '', clock_in: '', clock_out: '', job_id: '', entry_type: 'work' }); setActionError(null); }} disabled={actionLoading} className="px-4 py-2 border border-border rounded-sm text-[13px] font-medium text-text-primary hover:bg-gray-100 disabled:opacity-50">
+              Cancel
+            </button>
+            <button onClick={handleAddEntry} disabled={actionLoading} className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-sm text-[13px] font-medium disabled:opacity-50">
+              {actionLoading ? 'Adding...' : 'Add Entry'}
+            </button>
+          </div>
+        </div>
+      )}
 
       {error && <div className="bg-red-50 border border-red-200 rounded-[10px] p-4 text-red-800 text-[13px]">{error}</div>}
       {actionError && <div className="bg-red-50 border border-red-200 rounded-[10px] p-4 text-red-800 text-[13px]">{actionError}</div>}
