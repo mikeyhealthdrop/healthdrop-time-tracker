@@ -41,6 +41,7 @@ export default async function DashboardLayout({
     { href: '/dashboard', label: 'Time Clock' },
     { href: '/dashboard/jobs', label: 'Jobs' },
     { href: '/dashboard/reports', label: 'Job Cost Report' },
+    { href: '/dashboard/time-entries', label: 'Time Entries' },
     { href: '/dashboard/manager', label: 'Live View' },
   ]
 
