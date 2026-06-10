@@ -4,7 +4,25 @@ import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 
 /**
- * Get all time entries for an org within a date range (for admin editing)
+ * Verify that the current user has admin or manager role
+ */
+async function verifyAdminOrManager() {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { supabase, profile: null }
+
+  const { data: profile } = await supabase
+    .from('users')
+    .select('id, role, org_id')
+    .eq('auth_id', user.id)
+    .single()
+
+  if (!profile || (profile.role !== 'admin' && profile.role !== 'manager')) return { supabase, profile: null }
+  return { supabase, profile }
+}
+
+/**
+ * Get all time entries for an org within a date range (for admin/manager editing)
  */
 export async function getTimeEntriesForAdmin(
   orgId: string,
@@ -12,7 +30,8 @@ export async function getTimeEntriesForAdmin(
   endDate: string,
   employeeId?: string
 ) {
-  const supabase = await createClient()
+  const { supabase, profile } = await verifyAdminOrManager()
+  if (!profile) return { error: 'Unauthorized', data: [] }
 
   let query = supabase
     .from('time_entries')
@@ -33,7 +52,60 @@ export async function getTimeEntriesForAdmin(
 }
 
 /**
- * Update a time entry (admin only) with audit log
+ * Add a new time entry manually (admin or manager)
+ */
+export async function addTimeEntry(
+  orgId: string,
+  addedBy: string,
+  entry: {
+    userId: string
+    clockIn: string
+    clockOut: string | null
+    jobId: string | null
+    entryType: 'work' | 'lunch'
+  }
+) {
+  const { supabase, profile } = await verifyAdminOrManager()
+  if (!profile) return { error: 'Unauthorized' }
+
+  const { data, error } = await supabase
+    .from('time_entries')
+    .insert({
+      org_id: orgId,
+      user_id: entry.userId,
+      clock_in: entry.clockIn,
+      clock_out: entry.clockOut,
+      job_id: entry.jobId,
+      entry_type: entry.entryType,
+    })
+    .select('*, user:users(first_name, last_name, email), job:jobs(job_number)')
+    .single()
+
+  if (error) return { error: error.message }
+
+  // Create audit log for the manual addition
+  await supabase
+    .from('time_entry_edits')
+    .insert({
+      time_entry_id: data.id,
+      edited_by: addedBy,
+      old_values: {},
+      new_values: {
+        clock_in: entry.clockIn,
+        clock_out: entry.clockOut,
+        job_id: entry.jobId,
+        user_id: entry.userId,
+        entry_type: entry.entryType,
+      },
+      reason: 'Manually added time entry',
+    })
+
+  revalidatePath('/dashboard/time-entries')
+  return { success: true, data }
+}
+
+/**
+ * Update a time entry (admin or manager) with audit log
  */
 export async function editTimeEntry(
   entryId: string,
@@ -46,7 +118,8 @@ export async function editTimeEntry(
     jobId?: string | null
   }
 ) {
-  const supabase = await createClient()
+  const { supabase, profile } = await verifyAdminOrManager()
+  if (!profile) return { error: 'Unauthorized' }
 
   // Get current values first
   const { data: current, error: fetchError } = await supabase
@@ -115,7 +188,7 @@ export async function editTimeEntry(
 }
 
 /**
- * Delete a time entry (admin only) — with audit log
+ * Delete a time entry (admin or manager) — with audit log
  */
 export async function deleteTimeEntry(
   entryId: string,
@@ -123,7 +196,8 @@ export async function deleteTimeEntry(
   deletedBy: string,
   reason: string
 ) {
-  const supabase = await createClient()
+  const { supabase, profile } = await verifyAdminOrManager()
+  if (!profile) return { error: 'Unauthorized' }
 
   // Get current values for audit
   const { data: current, error: fetchError } = await supabase
@@ -163,7 +237,8 @@ export async function deleteTimeEntry(
  * Get edit history for a time entry
  */
 export async function getTimeEntryEdits(entryId: string) {
-  const supabase = await createClient()
+  const { supabase, profile } = await verifyAdminOrManager()
+  if (!profile) return { error: 'Unauthorized', data: [] }
 
   const { data, error } = await supabase
     .from('time_entry_edits')
