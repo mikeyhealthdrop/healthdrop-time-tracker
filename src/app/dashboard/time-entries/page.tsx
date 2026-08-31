@@ -14,6 +14,7 @@ export default async function TimeEntriesPage() {
       .from('users')
       .select('id, first_name, last_name')
       .eq('org_id', profile.org_id)
+      .eq('is_active', true)
       .order('first_name', { ascending: true }),
     supabase
       .from('jobs')
