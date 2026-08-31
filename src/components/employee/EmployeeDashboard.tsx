@@ -37,7 +37,7 @@ export function EmployeeDashboard({
   const [showJobSwitch, setShowJobSwitch] = useState(false)
   const [switchJobId, setSwitchJobId] = useState('')
 
-  // Use ref for stable reference â createClient() returns a singleton but
+  // Use ref for stable reference — createClient() returns a singleton but
   // calling it in render body creates a new reference each time
   const supabaseRef = useRef(createClient())
   const supabase = supabaseRef.current
@@ -206,7 +206,7 @@ export function EmployeeDashboard({
                   backgroundPosition: 'right 16px center',
                 }}
               >
-                <option value="">â Choose a job â</option>
+                <option value="">— Choose a job —</option>
                 {activeJobs.map((job) => (
                   <option key={job.id} value={job.id}>
                     {job.job_number}
@@ -271,7 +271,7 @@ export function EmployeeDashboard({
                   onChange={(e) => setSwitchJobId(e.target.value)}
                   className="w-full px-3 py-2 border border-border rounded-sm text-[14px] text-text-primary bg-surface mb-2"
                 >
-                  <option value="">â Select new job â</option>
+                  <option value="">— Select new job —</option>
                   {activeJobs
                     .filter((j) => j.id !== activeEntry?.job_id)
                     .map((job) => (
