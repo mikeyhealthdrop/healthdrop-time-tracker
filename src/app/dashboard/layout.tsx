@@ -1,5 +1,5 @@
-import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
+import { getAuthProfile } from '@/lib/auth'
 import { TopBar } from '@/components/TopBar'
 import Link from 'next/link'
 
@@ -8,21 +8,9 @@ export default async function DashboardLayout({
 }: {
   children: React.ReactNode
 }) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const { user, profile } = await getAuthProfile()
 
-  if (!user) {
-    redirect('/login')
-  }
-
-  // Get user profile
-  const { data: profile } = await supabase
-    .from('users')
-    .select('*, organization:organizations(name)')
-    .eq('auth_id', user.id)
-    .single()
-
-  if (!profile) {
+  if (!user || !profile) {
     redirect('/login')
   }
 
