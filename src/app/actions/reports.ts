@@ -85,7 +85,7 @@ export async function generateJobCostReport(
   // Build query for work time entries
   let query = supabase
     .from('time_entries')
-    .select('*, user:users(first_name, last_name, employee_type, loaded_rate)')
+    .select('*, user:users(first_name, last_name, employee_type, loaded_rate, is_active)')
     .eq('job_id', jobId)
     .eq('org_id', orgId)
     .eq('entry_type', 'work')
@@ -127,7 +127,7 @@ export async function generateJobCostReport(
 
     return {
       date: clockIn.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }),
-      employeeName: `${entry.user?.first_name || ''} ${entry.user?.last_name || ''}`.trim(),
+      employeeName: `${entry.user?.first_name || ''} ${entry.user?.last_name || ''}`.trim() + (entry.user?.is_active === false ? ' (Inactive)' : ''),
       employeeType: entry.user?.employee_type || 'w2',
       clockIn: clockIn.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }),
       clockOut: clockOut.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }),
@@ -268,7 +268,7 @@ export async function generatePayrollReport(
 
   const { data: entries, error } = await supabase
     .from('time_entries')
-    .select('*, user:users(first_name, last_name, employee_type, base_rate, loaded_rate), job:jobs(job_number)')
+    .select('*, user:users(first_name, last_name, employee_type, base_rate, loaded_rate, is_active), job:jobs(job_number)')
     .eq('org_id', orgId)
     .eq('entry_type', 'work')
     .not('clock_out', 'is', null)
@@ -298,7 +298,7 @@ export async function generatePayrollReport(
     const loadedRate = entry.user?.loaded_rate || 0
 
     return {
-      employeeName: `${entry.user?.first_name || ''} ${entry.user?.last_name || ''}`.trim(),
+      employeeName: `${entry.user?.first_name || ''} ${entry.user?.last_name || ''}`.trim() + (entry.user?.is_active === false ? ' (Inactive)' : ''),
       employeeType: entry.user?.employee_type || 'w2',
       jobNumber: entry.job?.job_number || 'No Job',
       clockIn: entry.clock_in,
