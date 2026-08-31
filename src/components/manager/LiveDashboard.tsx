@@ -27,7 +27,6 @@ export default function LiveDashboard({ orgId }: LiveDashboardProps) {
   const [loading, setLoading] = useState(true);
   const [elapsedSeconds, setElapsedSeconds] = useState<Record<string, number>>({});
   const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  const refreshIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const subscriptionRef = useRef<any>(null);
 
   const fetchActiveEntries = async () => {
@@ -60,6 +59,7 @@ export default function LiveDashboard({ orgId }: LiveDashboardProps) {
   useEffect(() => {
     fetchActiveEntries();
 
+    // Realtime subscription handles updates â no polling needed
     subscriptionRef.current = supabase
       .channel(`time_entries:${orgId}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'time_entries', filter: `org_id=eq.${orgId}` }, () => {
@@ -67,11 +67,8 @@ export default function LiveDashboard({ orgId }: LiveDashboardProps) {
       })
       .subscribe();
 
-    refreshIntervalRef.current = setInterval(() => { fetchActiveEntries(); }, 30000);
-
     return () => {
       if (subscriptionRef.current) subscriptionRef.current.unsubscribe();
-      if (refreshIntervalRef.current) clearInterval(refreshIntervalRef.current);
     };
   }, [orgId]);
 
